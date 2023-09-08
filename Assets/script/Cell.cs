@@ -1,8 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using DG.Tweening;
 
 public class Cell : MonoBehaviour
 {
+    
+    public GameObject _disc;
     private int _reverseCount = 0;
     public int ReverseCount
     {
@@ -44,11 +47,11 @@ public class Cell : MonoBehaviour
         }
         if (_cellState == CellState.White)
         {
-            GetComponent<Image>().color = Color.white;
+            _disc.transform.DORotate(new Vector3(1, 0, 0) * 90f, 1f);
         }
         if (_cellState == CellState.Black)
         {
-            GetComponent<Image>().color = Color.black;
+            _disc.transform.DORotate(new Vector3(1, 0, 0) * -90f, 1f);
         }
         if (_cellState == CellState.None)
         {

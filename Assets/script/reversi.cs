@@ -3,8 +3,10 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using System.Collections;
+using System.Linq;
+using UnityEngine.SceneManagement;
 
-public class reversi : MonoBehaviour, IPointerClickHandler
+public class Reversi : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField]
     Cell _cellPrefab;
@@ -12,39 +14,74 @@ public class reversi : MonoBehaviour, IPointerClickHandler
     private GridLayoutGroup _gridLayoutGroup = null;
     [SerializeField]
     private GameObject _discPrefab;
+    [SerializeField]
+    private Text _timerText;
+    [SerializeField]
+    private Text _blackCountText;
+    [SerializeField]
+    private Text _whiteCountText;
+    [SerializeField]
+    private string _recode = "";
+    [SerializeField]
+    private InputField _resultString;
+    [SerializeField]
+    private GameObject _resultPanel;
+    [SerializeField]
+    private GameObject _pickDifficultyPanel;
+    [SerializeField]
+    private Text _resultText;
+    [SerializeField]
+    private Text _winnerText;
+    [SerializeField]
+    private ToggleGroup _timeLimitSetting;
     private Cell[,] _cells;
     List<Cell> _canPutAllCell;
     private List<Cell> _reversDiscs;
-    private List<List<Cell.CellState>> _gameRecord;
     private bool _sand;
     private bool _turn = true;
+    public bool _normal = false;
+    private int _whiteCount;
+    private int _blackCount;
     private int _count;
     private int _rows = 8;
     private int _columns = 8;
-    private string _recode = "54536265222524";
-    private List<string> _procedure;
+    private float _timer;
+    private int _timeLimit;
+
+    private GameState _gameState = GameState.PickDifficulty;
     private void Awake()
     {
         GenerateBoard();
 
+        _cells[3, 3]._disc.SetActive(true);
         _cells[3, 3].CellColorState = Cell.CellState.Black;
+        _cells[4, 4]._disc.SetActive(true);
         _cells[4, 4].CellColorState = Cell.CellState.Black;
+        _cells[4, 3]._disc.SetActive(true);
         _cells[4, 3].CellColorState = Cell.CellState.White;
+        _cells[3, 4]._disc.SetActive(true);
         _cells[3, 4].CellColorState = Cell.CellState.White;
     }
     private void Start()
     {
         SarchCanPutCell();
         _canPutAllCell = new();
-
-        //_procedure = new();
-        //for (int i = 0; i < _recode.Length; i+=2)
-        //{
-        //    string PutPosRow =_recode[i].ToString();
-        //    string PutPosColumn = _recode[i + 1].ToString();
-
-        //    PutDisc(int.Parse(PutPosRow), int.Parse(PutPosColumn));
-        //}
+        _resultString.text = _recode;
+        _whiteCountText.text = "Åú 2";
+        _blackCountText.text = "Åú 2";
+    }
+    private void Update()
+    {
+        if (_gameState == GameState.InGame)
+        {
+            _timer += Time.deltaTime;
+            _timerText.text = (_timeLimit - _timer).ToString("00");
+            if (_timeLimit - _timer < 0)
+            {
+                PutRandom();
+                EnemyMove();
+            }
+        }
     }
     public void GenerateBoard()
     {
@@ -53,7 +90,6 @@ public class reversi : MonoBehaviour, IPointerClickHandler
 
         _cells = new Cell[_rows, _columns];
         _reversDiscs = new List<Cell>();
-        _gameRecord = new();
 
         var parent = _gridLayoutGroup.transform;
         for (int r = 0; r < _rows; r++)
@@ -64,6 +100,9 @@ public class reversi : MonoBehaviour, IPointerClickHandler
                 cell.transform.SetParent(parent);
                 cell.name = $"{r},{c}";
                 _cells[r, c] = cell;
+                var disc =Instantiate(_discPrefab, cell.transform);
+                cell._disc = disc;
+                disc.SetActive(false);
             }
         }
     }
@@ -84,12 +123,12 @@ public class reversi : MonoBehaviour, IPointerClickHandler
                 }
             }
         }
-        if (eventData.button == PointerEventData.InputButton.Left)
+        if (eventData.button == PointerEventData.InputButton.Left && _gameState == GameState.InGame && _turn)
         {
             if (_cells[tmprow, tmpcolum].CanPut)
             {
                 PutDisc(tmprow, tmpcolum);
-                EnemyMove();
+                Invoke("EnemyMove", 1f);
             }
         }
     }
@@ -105,7 +144,58 @@ public class reversi : MonoBehaviour, IPointerClickHandler
                 _canPutAllCell.Add(cell);
             }
         }
-        if (_canPutAllCell.Count > 0)
+        if (_canPutAllCell.Count > 0 && !_normal)
+        {
+            int randomIndex = Random.Range(0, _canPutAllCell.Count);
+            Cell randomCell = _canPutAllCell[randomIndex];
+            for (int r = 0; r < _rows; r++)
+            {
+                for (int c = 0; c < _columns; c++)
+                {
+                    if (randomCell == _cells[r, c])
+                    {
+                        Row = r;
+                        Column = c;
+                    }
+                }
+            }
+            _canPutAllCell.Clear();
+        }
+        else if (_canPutAllCell.Count > 0 && _normal)
+        {
+            int MaxReverseCount = 0;
+            for (int r = 0; r < _rows; r++)
+            {
+                for (int c = 0; c < _columns; c++)
+                {
+                    if (MaxReverseCount < _cells[r, c].ReverseCount)
+                    {
+                        Row = r;
+                        Column = c;
+                        MaxReverseCount = _cells[r, c].ReverseCount;
+                    }
+                }
+            }
+        }
+
+        if (Row != -1 && Column != -1)
+        {
+            PutDisc(Row, Column);
+        }
+    }
+    private void PutRandom()
+    {
+        int Row = -1;
+        int Column = -1;
+
+        foreach (var cell in _cells)
+        {
+            if (cell.CanPut)
+            {
+                _canPutAllCell.Add(cell);
+            }
+        }
+        if (_canPutAllCell.Count > 0 && !_normal)
         {
             int randomIndex = Random.Range(0, _canPutAllCell.Count);
             Cell randomCell = _canPutAllCell[randomIndex];
@@ -130,25 +220,37 @@ public class reversi : MonoBehaviour, IPointerClickHandler
     }
     private void PutDisc(int Row, int Colum)
     {
-        //var Recode = new List<Cell.CellState>();
-
+        var Disc = _cells[Row, Colum]._disc;
+        Disc.SetActive(true);
+        _timer = 0;
         if (_turn)
         {
             _cells[Row, Colum].CellColorState = Cell.CellState.Black;
             SarchReverceDisc(Row, Colum, Cell.CellState.Black);
+            _recode += (Row * 10 + Colum).ToString();
+            _resultString.text = _recode;
         }
         else
         {
             _cells[Row, Colum].CellColorState = Cell.CellState.White;
             SarchReverceDisc(Row, Colum, Cell.CellState.White);
+            _recode += (Row * 10 + Colum).ToString();
+            _resultString.text = _recode;
         }
 
         foreach (var cell in _cells)
         {
             cell.CanPut = false;
             cell.ReverseCount = 0;
-            //Recode.Add(cell.CellColorState);
+            if (cell.CellColorState == Cell.CellState.White) _whiteCount++;
+            if (cell.CellColorState == Cell.CellState.Black) _blackCount++;
         }
+
+        _whiteCountText.text = "Åú" + _whiteCount.ToString();
+        _blackCountText.text = "Åú" + _blackCount.ToString();
+
+        _whiteCount = 0;
+        _blackCount = 0;
 
         _turn = !_turn;
         SarchCanPutCell();
@@ -180,7 +282,6 @@ public class reversi : MonoBehaviour, IPointerClickHandler
         }
 
         GameEnd();
-        //_gameRecord.Add(Recode);
     }
     private void SarchCanPutCell()
     {
@@ -245,12 +346,6 @@ public class reversi : MonoBehaviour, IPointerClickHandler
                 _sand = false;
             }
         }
-        //if (_count == 0)
-        //{
-        //    _turn = !_turn;
-
-        //    SarchCanPutCell();
-        //}
     }
     private void SarchReverceDisc(int Row, int Column, Cell.CellState Color)
     {
@@ -294,10 +389,98 @@ public class reversi : MonoBehaviour, IPointerClickHandler
     }
     private void GameEnd()
     {
-        Debug.Log("owa");
+        _gameState = GameState.GameEnd;
+        _resultPanel.SetActive(true);
+        foreach (var cell in _cells)
+        { 
+            if (cell.CellColorState == Cell.CellState.White) _whiteCount++;
+            if (cell.CellColorState == Cell.CellState.Black) _blackCount++;
+        }
+        _resultText.text = _blackCount.ToString() + " -- " + _whiteCount.ToString();
+        if (_whiteCount == _blackCount)
+        {
+            _winnerText.text = "Draw";
+        }
+        else
+        {
+            _winnerText.text = _blackCount > _whiteCount ? "çïÇÃèüÇøÅI" : "îíÇÃèüÇøÅI";
+        }
+    }
+    public void ReproductionRecode()
+    {
+        _gameState = GameState.Recode;
+        var data = _resultString.text.Trim();
+        if (data.Length % 2 == 0)
+        {
+            for (int r = 0; r < _rows; r++)
+            {
+                for (int c = 0; c < _columns; c++)
+                {
+                    _cells[r, c].CellColorState = Cell.CellState.None;
+                    _cells[r, c]._disc.SetActive(false);
+                }
+            }
+
+            _cells[3, 3]._disc.SetActive(true);
+            _cells[3, 3].CellColorState = Cell.CellState.Black;
+            _cells[4, 4]._disc.SetActive(true);
+            _cells[4, 4].CellColorState = Cell.CellState.Black;
+            _cells[4, 3]._disc.SetActive(true);
+            _cells[4, 3].CellColorState = Cell.CellState.White;
+            _cells[3, 4]._disc.SetActive(true);
+            _cells[3, 4].CellColorState = Cell.CellState.White;
+
+            _resultString.text = "";
+            _recode = "";
+
+
+            StartCoroutine(MakeDistance(data));
+
+        }
+        _gameState = GameState.InGame;
+    }
+    public void ModeEasy()
+    {
+        string selectedLabel = _timeLimitSetting.ActiveToggles()
+            .First().GetComponentsInChildren<Text>()
+            .First(t => t.name == "Label").text;
+        _timeLimit = int.Parse(selectedLabel);
+        _normal = false;
+        _gameState = GameState.InGame;
+        _pickDifficultyPanel.SetActive(false);
+        _turn = true;
+    }
+    public void ModeNormal()
+    {
+        string selectedLabel = _timeLimitSetting.ActiveToggles()
+            .First().GetComponentsInChildren<Text>()
+            .First(t => t.name == "Label").text;
+        _timeLimit = int.Parse(selectedLabel);
+        _normal = true;
+        _gameState = GameState.InGame;
+        _pickDifficultyPanel.SetActive(false);
+        _turn = true;
+    }
+    public void Title()
+    {
+        SceneManager.LoadScene("Osero");
+    }
+    IEnumerator MakeDistance(string data)
+    {      
+        for (int i = 0; i < data.Length; i += 2)
+        {
+            string PutPosRow = data[i].ToString();
+            string PutPosColumn = data[i + 1].ToString();
+
+            PutDisc(int.Parse(PutPosRow), int.Parse(PutPosColumn));
+            yield return new WaitForSeconds(1.0f);
+        }
     }
     private enum GameState
     {
-
+        Recode,
+        PickDifficulty,
+        InGame,
+        GameEnd
     }
 }
